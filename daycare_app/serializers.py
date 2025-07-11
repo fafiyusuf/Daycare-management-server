@@ -126,6 +126,7 @@ class GallerySerializer(serializers.ModelSerializer):
     class Meta:
         model = Gallery
         fields = '__all__'
+        read_only_fields = ['uploaded_by'] 
 
 class StaffProfileSerializer(serializers.ModelSerializer):
     user_details = UserSerializer(source='user', read_only=True)

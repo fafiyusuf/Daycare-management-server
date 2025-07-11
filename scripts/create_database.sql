@@ -5,7 +5,7 @@ CREATE DATABASE daycare_db;
 CREATE USER daycare_user WITH PASSWORD 'your_password';
 
 -- Grant privileges
-GRANT ALL PRIVILEGES ON DATABASE daycare_db TO daycare_user;
+GRANT CONNECT, CREATE, TEMPORARY ON DATABASE daycare_db TO daycare_user;
 
 -- Connect to the database
 \c daycare_db;
