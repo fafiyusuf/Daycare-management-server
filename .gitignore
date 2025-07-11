@@ -1,0 +1,56 @@
+# Python
+*.pyc
+__pycache__/
+.Python
+env/
+venv/
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.pytest_cache/
+nosetests.xml
+coverage.xml
+htmlcov/
+.ipynb_checkpoints
+.mypy_cache/
+.dmypy.json
+celerybeat-schedule/
+*.egg-info/
+.hatch/
+
+# Django-specific
+*.log
+*.pot
+*.mo
+*.prof
+
+# Local database (SQLite)
+db.sqlite3
+/media/ # Or other paths where user-uploaded media files are stored
+/static/ # If you collect static files locally and don't want to commit them
+
+# IDE-specific files
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# OS-specific
+.DS_Store # macOS
+Thumbs.db # Windows
+
+# Environment variables and sensitive settings
+
+.env
+.env.local
+.env.*.local
+.env.development.local
+.env.test.local
+.env.production.local 
+local_settings.py 
+
+# Temporary files
+*~
+*.swp
+.DS_Store
