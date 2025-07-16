@@ -1,3 +1,5 @@
+# daycare_app/serializers.py
+
 from rest_framework import serializers
 from django.contrib.auth import authenticate
 from .models import *
@@ -30,10 +32,12 @@ class UserSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         # Handle password update separately if provided
         password = validated_data.pop('password', None)
+        if password:
+            instance.set_password(password)
+
+        # Update other fields
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
-        if password is not None:
-            instance.set_password(password) # Use set_password for hashing new password
         instance.save()
         return instance
 
@@ -46,7 +50,7 @@ class LoginSerializer(serializers.Serializer):
         password = data.get('password')
         
         if username and password:
-            user = authenticate(request=self.context.get('request'), username=username, password=password) # Pass request for proper authentication backend
+            user = authenticate(username=username, password=password)
             if user:
                 if user.is_active:
                     data['user'] = user
@@ -68,9 +72,9 @@ class StaffCreateSerializer(serializers.ModelSerializer):
     
     def create(self, validated_data):
         password = validated_data.pop('password')
-        # Use create_user for proper password hashing
         user = User.objects.create_user(**validated_data)
-        user.set_password(password) # set_password handles hashing
+        user.set_password(password)
+        user.is_active_staff = True # New staff created should be active staff
         user.save()
         return user
 
@@ -80,53 +84,62 @@ class FamilySerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class ChildSerializer(serializers.ModelSerializer):
-    parents_details = UserSerializer(source='parents', many=True, read_only=True)
-    assigned_babysitter_details = UserSerializer(source='assigned_babysitter', read_only=True)
-    
+    family_name = serializers.CharField(source='family.name', read_only=True)
+    parents = UserSerializer(many=True, read_only=True) # Nested serializer for parents
+    assigned_babysitter_name = serializers.CharField(source='assigned_babysitter.get_full_name', read_only=True)
+
     class Meta:
         model = Child
         fields = '__all__'
 
 class AttendanceSerializer(serializers.ModelSerializer):
-    child_details = ChildSerializer(source='child', read_only=True)
-    checked_in_by_details = UserSerializer(source='checked_in_by', read_only=True)
-    checked_out_by_details = UserSerializer(source='checked_out_by', read_only=True)
-    
+    child_name = serializers.CharField(source='child.first_name', read_only=True)
+    checked_in_by_name = serializers.CharField(source='checked_in_by.get_full_name', read_only=True)
+    checked_out_by_name = serializers.CharField(source='checked_out_by.get_full_name', read_only=True)
+
     class Meta:
         model = Attendance
         fields = '__all__'
+        read_only_fields = ['checked_in_by', 'checked_out_by']
 
 class ChildActivitySerializer(serializers.ModelSerializer):
-    child_details = ChildSerializer(source='child', read_only=True)
-    logged_by_details = UserSerializer(source='logged_by', read_only=True)
-    
+    logged_by_name = serializers.CharField(source='logged_by.get_full_name', read_only=True)
+
     class Meta:
         model = ChildActivity
         fields = '__all__'
+        read_only_fields = ['logged_by']
 
 class HealthEventSerializer(serializers.ModelSerializer):
-    child_details = ChildSerializer(source='child', read_only=True)
-    recorded_by_details = UserSerializer(source='recorded_by', read_only=True)
-    
+    recorded_by_name = serializers.CharField(source='recorded_by.get_full_name', read_only=True)
+
     class Meta:
         model = HealthEvent
         fields = '__all__'
+        read_only_fields = ['recorded_by']
+
+class DailyReportSerializer(serializers.Serializer):
+    child_id = serializers.IntegerField()
+    child_name = serializers.CharField()
+    date = serializers.DateField()
+    activities = ChildActivitySerializer(many=True)
+    health_events = HealthEventSerializer(many=True)
 
 class AnnouncementSerializer(serializers.ModelSerializer):
-    author_details = UserSerializer(source='author', read_only=True)
-    
+    author_name = serializers.CharField(source='author.get_full_name', read_only=True)
+
     class Meta:
         model = Announcement
         fields = '__all__'
-        read_only_fields = ['author'] 
+        read_only_fields = ['author']
 
 class GallerySerializer(serializers.ModelSerializer):
-    uploaded_by_details = UserSerializer(source='uploaded_by', read_only=True)
-    
+    uploaded_by_name = serializers.CharField(source='uploaded_by.get_full_name', read_only=True)
+
     class Meta:
         model = Gallery
         fields = '__all__'
-        read_only_fields = ['uploaded_by'] 
+        read_only_fields = ['uploaded_by']
 
 class StaffProfileSerializer(serializers.ModelSerializer):
     user_details = UserSerializer(source='user', read_only=True)
@@ -166,6 +179,7 @@ class ChatUserSerializer(serializers.ModelSerializer):
             return {
                 'message': last_message.message[:50] + '...' if len(last_message.message) > 50 else last_message.message,
                 'timestamp': last_message.timestamp,
-                'sender': last_message.sender.username
+                'sender_id': last_message.sender.id,
+                'is_read': last_message.is_read
             }
         return None

@@ -18,6 +18,9 @@ router.register(r'gallery', views.GalleryViewSet)
 router.register(r'staff-profiles', views.StaffProfileViewSet)
 
 urlpatterns = [
+    # Router URLs
+    path('', include(router.urls)), # Include DRF router URLs
+
     # Authentication
     path('login/', views.login_view, name='login'),
     path('logout/', views.logout_view, name='logout'),
@@ -36,7 +39,7 @@ urlpatterns = [
     # Public Portal
     path('public/announcements/', views.public_announcements, name='public_announcements'),
     path('public/gallery/', views.public_gallery, name='public_gallery'),
-    path('public/staff/', views.public_staff, name='public_staff'),#
+    path('public/staff/', views.public_staff, name='public_staff'),
     
     # System
     path('system/status/', views.system_status, name='system_status'),
@@ -45,9 +48,6 @@ urlpatterns = [
     path('chat/users/', views.chat_users, name='chat_users'),
     path('chat/conversations/', views.chat_conversations, name='chat_conversations'),
     path('chat/<int:user_id>/messages/', views.chat_messages, name='chat_messages'),
-    path('chat/<int:user_id>/send/', views.send_message, name='send_message'),
+    path('chat/<int:user_id>/send/', views.chat_send, name='send_message'), # Corrected: views.send_message to views.chat_send
     path('chat/unread-count/', views.unread_count, name='unread_count'),
-    
-    # Router URLs (ensure this is always at the end, so specific paths are matched first)
-    path('', include(router.urls)),
 ]
