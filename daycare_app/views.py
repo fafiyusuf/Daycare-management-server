@@ -40,9 +40,6 @@ def logout_view(request):
 @api_view(['POST'])
 @permission_classes([permissions.AllowAny])
 def password_reset_view(request):
-    # This is a placeholder. A real password reset would involve
-    # sending an email with a reset link/token.
-    # For now, we'll just acknowledge the request.
     email = request.data.get('email')
     if email:
         return Response({"message": f"Password reset initiated for {email}. (Feature not fully implemented)"}, status=status.HTTP_200_OK)
@@ -54,54 +51,40 @@ class UserViewSet(viewsets.ModelViewSet):
     serializer_class = UserSerializer
     
     def get_permissions(self):
-            """
-            Set permissions based on the action.
-            - 'create': Only Admin can create new users (as per your specific requirement).
-            - 'list', 'retrieve': Authenticated users can view.
-            - 'update', 'partial_update', 'destroy': Only admin can modify/delete.
-            """
-            # Ensure only permission CLASSES are in the list
             if self.action == 'create':
                 permission_classes = [IsAdminUser] 
             elif self.action in ['list', 'retrieve']:
                 permission_classes = [permissions.IsAuthenticated] 
-            else: # For 'update', 'partial_update', 'destroy'
+            else:
                 permission_classes = [IsAdminUser]
             return [permission() for permission in permission_classes]
 
 class StaffViewSet(viewsets.ModelViewSet):
     queryset = User.objects.filter(role__in=['admin', 'receptionist', 'babysitter', 'nurse'])
-    serializer_class = StaffCreateSerializer # Use StaffCreateSerializer for creating staff
-    permission_classes = [IsAdminUser] # Only admin can manage staff
+    serializer_class = StaffCreateSerializer
+    permission_classes = [IsAdminUser]
 
     def get_serializer_class(self):
         if self.action == 'create':
             return StaffCreateSerializer
-        return UserSerializer # Use UserSerializer for retrieving/updating staff details
-
+        return UserSerializer
 
 class FamilyViewSet(viewsets.ModelViewSet):
     queryset = Family.objects.all()
     serializer_class = FamilySerializer
-    permission_classes = [IsAdminOrReceptionist] # Admin and Receptionist can manage families
+    permission_classes = [IsAdminOrReceptionist]
 
 class ChildViewSet(viewsets.ModelViewSet):
     queryset = Child.objects.all()
     serializer_class = ChildSerializer
-    permission_classes = [permissions.IsAuthenticated] # Base permission, refined by get_permissions
+    permission_classes = [permissions.IsAuthenticated]
 
     def get_permissions(self):
-        """
-        Permissions for Child:
-        - Admin: Can manage all children (create, view, update, delete).
-        - Receptionist: Can create, view, update children.
-        - Babysitter: Can view assigned children.
-        - Parent: Can view their own children.
-        """
         if self.action in ['create', 'update', 'partial_update']:
             permission_classes = [IsAdminOrReceptionist]
         elif self.action in ['list', 'retrieve']:
-            permission_classes = [IsAdminOrReceptionist | IsBabysitterUser | IsParentUser]
+            # ✅ CORRECTED LINE: Added 'IsNurseUser' to allow viewing children.
+            permission_classes = [IsAdminOrReceptionist | IsBabysitterUser | IsParentUser | IsNurseUser]
         elif self.action == 'destroy':
             permission_classes = [IsAdminUser]
         else:
@@ -117,9 +100,8 @@ class ChildViewSet(viewsets.ModelViewSet):
             elif user.role == 'babysitter':
                 return queryset.filter(assigned_babysitter=user)
             elif user.role in ['admin', 'receptionist', 'nurse']:
-                return queryset # Staff roles can see all children
-        return Child.objects.none() # No children for unauthenticated users
-
+                return queryset
+        return Child.objects.none()
 
 @api_view(['POST'])
 @permission_classes([IsAdminUser])
@@ -240,7 +222,6 @@ def attendance_by_date(request, date_str):
     serializer = AttendanceSerializer(attendance_records, many=True)
     return Response(serializer.data)
 
-
 # --- Child Activity Management ---
 class ChildActivityViewSet(viewsets.ModelViewSet):
     queryset = ChildActivity.objects.all()
@@ -251,7 +232,7 @@ class ChildActivityViewSet(viewsets.ModelViewSet):
         if self.action == 'create':
             permission_classes = [IsBabysitterUser | IsAdminUser]
         elif self.action in ['list', 'retrieve']:
-            permission_classes = [IsBabysitterUser | IsParentUser | IsAdminUser]
+            permission_classes = [IsBabysitterUser | IsParentUser | IsAdminUser | IsNurseUser]
         elif self.action in ['update', 'partial_update', 'destroy']:
             permission_classes = [IsAdminUser]
         else:
@@ -271,10 +252,9 @@ class ChildActivityViewSet(viewsets.ModelViewSet):
                 return queryset.filter(child__assigned_babysitter=user)
             elif user.role == 'parent':
                 return queryset.filter(child__parents=user)
-            elif user.role == 'admin':
+            elif user.role in ['admin', 'nurse']:
                 return queryset
         return ChildActivity.objects.none()
-
 
 # --- Health Event Management ---
 class HealthEventViewSet(viewsets.ModelViewSet):
@@ -288,7 +268,7 @@ class HealthEventViewSet(viewsets.ModelViewSet):
         elif self.action in ['list', 'retrieve']:
             permission_classes = [IsNurseUser | IsParentUser | IsAdminUser]
         elif self.action in ['update', 'partial_update', 'destroy']:
-            permission_classes = [IsAdminUser]
+            permission_classes = [IsAdminUser | IsNurseAndOwner]
         else:
             permission_classes = [permissions.IsAuthenticated]
 
@@ -302,14 +282,13 @@ class HealthEventViewSet(viewsets.ModelViewSet):
         user = self.request.user
 
         if user.is_authenticated:
-            if user.role == 'nurse':
+            if user.role == 'nurse':                
                 return queryset
             elif user.role == 'parent':
                 return queryset.filter(child__parents=user)
             elif user.role == 'admin':
                 return queryset
         return HealthEvent.objects.none()
-
 
 # --- Daily Reports Aggregation View ---
 @api_view(['GET'])
@@ -359,7 +338,6 @@ def daily_reports(request, child_id, date_str=None):
     serializer = DailyReportSerializer(report_data)
     return Response(serializer.data, status=status.HTTP_200_OK)
 
-
 # --- Announcement Management ---
 class AnnouncementViewSet(viewsets.ModelViewSet):
     queryset = Announcement.objects.all()
@@ -368,17 +346,13 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            # Only Admin or Receptionist can manage announcements
             permission_classes = [IsAdminOrReceptionist]
-        else: # For list and retrieve
-            # All authenticated users can view announcements
+        else:
             permission_classes = [permissions.IsAuthenticated]
         return [permission() for permission in permission_classes]
 
     def perform_create(self, serializer):
-        # Automatically set the author to the current authenticated user
         serializer.save(author=self.request.user)
-
 
 # --- Gallery Management ---
 class GalleryViewSet(viewsets.ModelViewSet):
@@ -388,17 +362,13 @@ class GalleryViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            # Only Admin or Receptionist can manage gallery items
             permission_classes = [IsAdminOrReceptionist]
-        else: # For list and retrieve
-            # All authenticated users can view gallery (or IsPublic for public view)
+        else:
             permission_classes = [permissions.IsAuthenticated]
         return [permission() for permission in permission_classes]
 
     def perform_create(self, serializer):
-        # Automatically set the uploader to the current authenticated user
         serializer.save(uploaded_by=self.request.user)
-
 
 # --- Staff Profile Management ---
 class StaffProfileViewSet(viewsets.ModelViewSet):
@@ -408,10 +378,8 @@ class StaffProfileViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            # Only Admin can manage staff profiles
             permission_classes = [IsAdminUser]
         elif self.action in ['list', 'retrieve']:
-            # Staff can view their own profile, Admin can view all. Public staff view is separate.
             permission_classes = [permissions.IsAuthenticated]
         else:
             permission_classes = [permissions.IsAuthenticated]
@@ -421,16 +389,11 @@ class StaffProfileViewSet(viewsets.ModelViewSet):
         queryset = super().get_queryset()
         user = self.request.user
         if user.is_authenticated and user.role != 'admin':
-            # Staff users can only see their own profile in this viewset
-            # Admins can see all, handled by default queryset
             if user.role in ['receptionist', 'babysitter', 'nurse']:
                 queryset = queryset.filter(user=user)
             elif user.role == 'parent':
-                # Parents should not typically view staff profiles via this endpoint
-                # (public_staff view is for public access)
-                queryset = StaffProfile.objects.none() # Or raise permission denied
+                queryset = StaffProfile.objects.none()
         return queryset
-
 
 # --- Public Portal Views ---
 @api_view(['GET'])
@@ -458,7 +421,6 @@ def public_staff(request):
 @api_view(['GET'])
 @permission_classes([IsAdminUser])
 def system_status(request):
-    # Example status metrics
     user_count = User.objects.count()
     child_count = Child.objects.count()
     active_children_today = Attendance.objects.filter(check_in_time__date=timezone.now().date(), check_out_time__isnull=True).count()
@@ -475,18 +437,12 @@ def system_status(request):
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
 def chat_users(request):
-    """
-    Get a list of all users excluding the requesting user, for chat purposes.
-    Admins see all users. Staff see other staff and parents. Parents see staff.
-    """
     user = request.user
     if user.role == 'admin':
         users = User.objects.exclude(id=user.id).order_by('first_name')
     elif user.role in ['receptionist', 'babysitter', 'nurse']:
-        # Staff can chat with other staff and parents
         users = User.objects.filter(Q(role__in=['admin', 'receptionist', 'babysitter', 'nurse']) | Q(role='parent')).exclude(id=user.id).order_by('first_name')
     elif user.role == 'parent':
-        # Parents can chat with staff (admin, receptionist, babysitter, nurse)
         users = User.objects.filter(role__in=['admin', 'receptionist', 'babysitter', 'nurse']).exclude(id=user.id).order_by('first_name')
     else:
         return Response({"error": "Unauthorized access to chat users."}, status=status.HTTP_403_FORBIDDEN)
@@ -494,42 +450,33 @@ def chat_users(request):
     serializer = ChatUserSerializer(users, many=True, context={'request': request})
     return Response(serializer.data)
 
-
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
 def chat_conversations(request):
-    """Get list of conversations (users you've chatted with)"""
     user = request.user
-    
-    # Get users who have sent or received messages from current user
     sent_to_ids = ChatMessage.objects.filter(sender=user).values_list('recipient__id', flat=True).distinct()
     received_from_ids = ChatMessage.objects.filter(recipient=user).values_list('sender__id', flat=True).distinct()
     
     all_chatted_user_ids = set(list(sent_to_ids) + list(received_from_ids))
     
-    # Exclude the current user from the list of conversation partners
     chatted_with_users = User.objects.filter(id__in=all_chatted_user_ids).exclude(id=user.id).order_by('first_name')
     
     serializer = ChatUserSerializer(chatted_with_users, many=True, context={'request': request})
     return Response(serializer.data)
 
-
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
 def chat_messages(request, user_id):
-    """Get messages between current user and a specific user"""
     try:
         other_user = User.objects.get(pk=user_id)
     except User.DoesNotExist:
         return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
     
-    # Messages sent by current user to other_user OR sent by other_user to current user
     messages = ChatMessage.objects.filter(
         Q(sender=request.user, recipient=other_user) |
         Q(sender=other_user, recipient=request.user)
     ).order_by('timestamp')
 
-    # Mark messages sent by other_user to current_user as read
     ChatMessage.objects.filter(sender=other_user, recipient=request.user, is_read=False).update(is_read=True)
     
     serializer = ChatMessageSerializer(messages, many=True)
@@ -538,11 +485,9 @@ def chat_messages(request, user_id):
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
 def chat_send(request, user_id):
-    """Send a message to a specific user"""
     try:
         recipient = User.objects.get(pk=user_id)
         
-        # Create message
         message = ChatMessage.objects.create(
             sender=request.user,
             recipient=recipient,
@@ -559,20 +504,5 @@ def chat_send(request, user_id):
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
 def unread_count(request):
-    """Get total unread message count"""
     count = ChatMessage.objects.filter(recipient=request.user, is_read=False).count()
     return Response({"unread_count": count})
-
-@api_view(['GET'])
-@permission_classes([permissions.IsAuthenticated])
-def chat_conversations(request):
-    """Get list of conversations (users you've chatted with)"""
-    # Get users who have sent or received messages from current user
-    sent_to = ChatMessage.objects.filter(sender=request.user).values_list('recipient', flat=True).distinct()
-    received_from = ChatMessage.objects.filter(recipient=request.user).values_list('sender', flat=True).distinct()
-    
-    user_ids = set(list(sent_to) + list(received_from))
-    users = User.objects.filter(id__in=user_ids)
-    
-    serializer = ChatUserSerializer(users, many=True, context={'request': request})
-    return Response(serializer.data)
