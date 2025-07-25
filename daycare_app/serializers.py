@@ -4,18 +4,21 @@ from rest_framework import serializers
 from django.contrib.auth import authenticate
 from .models import *
 from django.db.models import Q
+from datetime import date
+from dateutil.relativedelta import relativedelta
 
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'role', 'phone', 'is_active_staff', 'profile_picture', 'bio', 'password'] # Added 'password'
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'role', 'phone', 'is_active_staff', 'profile_picture', 'bio', 'password', 'is_public'] # Added 'is_public'
         extra_kwargs = {
             'password': {'write_only': True, 'required': False}, # 'required': False allows updates without changing password
             'is_active_staff': {'required': False},
             'profile_picture': {'required': False, 'allow_null': True},
             'bio': {'required': False, 'allow_blank': True},
             'phone': {'required': False, 'allow_blank': True},
-            'email': {'required': False, 'allow_blank': True}
+            'email': {'required': False, 'allow_blank': True},
+            'is_public': {'required': False},
         }
 
     def create(self, validated_data):
@@ -68,7 +71,7 @@ class StaffCreateSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = User
-        fields = ['username', 'email', 'first_name', 'last_name', 'role', 'phone', 'password']
+        fields = ['username', 'email', 'first_name', 'last_name', 'role', 'phone', 'password', 'is_public'] # Added 'is_public'
     
     def create(self, validated_data):
         password = validated_data.pop('password')
@@ -83,14 +86,88 @@ class FamilySerializer(serializers.ModelSerializer):
         model = Family
         fields = '__all__'
 
+# Corrected ChildSerializer
 class ChildSerializer(serializers.ModelSerializer):
-    family_name = serializers.CharField(source='family.name', read_only=True)
-    parents = UserSerializer(many=True, read_only=True) # Nested serializer for parents
-    assigned_babysitter_name = serializers.CharField(source='assigned_babysitter.get_full_name', read_only=True)
-
+    # This field is for output only.
+    parents = UserSerializer(many=True, read_only=True)
+    
+    # This is for input during create/update
+    parent_ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        write_only=True,
+        required=False
+    )
+    
     class Meta:
         model = Child
-        fields = '__all__'
+        fields = [
+            'id', 'first_name', 'last_name', 'date_of_birth', 'family',
+            'parents', 'parent_ids', 'assigned_babysitter', 'medical_info', 'allergies',
+            'emergency_contact', 'profile_picture', 'is_active', 'created_at'
+        ]
+        extra_kwargs = {
+            'parents': {'read_only': True},
+            'assigned_babysitter': {'required': False, 'allow_null': True},
+        }
+
+    def validate(self, data):
+        """
+        Check that a child with the same first_name, last_name, and date_of_birth
+        does not already exist, and that the child is between 4 months and 4 years old.
+        """
+        # ... (same validation logic as before) ...
+        first_name = data.get('first_name')
+        last_name = data.get('last_name')
+        date_of_birth = data.get('date_of_birth')
+
+        queryset = Child.objects.filter(
+            first_name=first_name,
+            last_name=last_name,
+            date_of_birth=date_of_birth
+        )
+        if self.instance:
+            queryset = queryset.exclude(pk=self.instance.pk)
+        
+        if queryset.exists():
+            raise serializers.ValidationError("A child with this first name, last name, and date of birth already exists.")
+
+        if date_of_birth:
+            today = date.today()
+            age = relativedelta(today, date_of_birth)
+            total_months = age.years * 12 + age.months
+            if total_months < 4 or total_months >= 48:
+                raise serializers.ValidationError("Child must be between 4 months and 4 years old.")
+        
+        return data
+
+    def create(self, validated_data):
+        parent_ids = validated_data.pop('parent_ids', [])
+        child = Child.objects.create(**validated_data)
+        if parent_ids:
+            parents = User.objects.filter(id__in=parent_ids)
+            child.parents.set(parents)
+        return child
+
+    def update(self, instance, validated_data):
+        parent_ids = validated_data.pop('parent_ids', [])
+        
+        instance.first_name = validated_data.get('first_name', instance.first_name)
+        instance.last_name = validated_data.get('last_name', instance.last_name)
+        instance.date_of_birth = validated_data.get('date_of_birth', instance.date_of_birth)
+        instance.family = validated_data.get('family', instance.family)
+        instance.assigned_babysitter = validated_data.get('assigned_babysitter', instance.assigned_babysitter)
+        instance.medical_info = validated_data.get('medical_info', instance.medical_info)
+        instance.allergies = validated_data.get('allergies', instance.allergies)
+        instance.emergency_contact = validated_data.get('emergency_contact', instance.emergency_contact)
+        instance.is_active = validated_data.get('is_active', instance.is_active)
+        instance.save()
+        
+        if parent_ids:
+            parents = User.objects.filter(id__in=parent_ids)
+            instance.parents.set(parents)
+
+        return instance
+
 
 class AttendanceSerializer(serializers.ModelSerializer):
     child_name = serializers.CharField(source='child.first_name', read_only=True)

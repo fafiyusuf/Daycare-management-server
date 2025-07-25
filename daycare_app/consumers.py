@@ -5,6 +5,14 @@ from .models import ChatMessage, User
 
 class ChatConsumer(AsyncWebsocketConsumer):
     async def connect(self):
+        # --- ADD THESE DEBUG PRINTS ---
+        print(f"\n--- WebSocket Connection Attempt ---")
+        print(f"Scope user type: {type(self.scope.get('user'))}")
+        if self.scope.get('user') and self.scope['user'].is_authenticated:
+            print(f"User authenticated: {self.scope['user'].username} (ID: {self.scope['user'].id})")
+        else:
+            print(f"User is NOT authenticated (Anonymous).")
+        # --- END DEBUG PRINTS ---
         self.user = self.scope["user"]
         if self.user.is_anonymous:
             await self.close()

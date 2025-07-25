@@ -93,17 +93,16 @@ class ChildViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         """
         Permissions for Child:
-        - Admin: Can manage all children (create, view, update, delete).
+        - Admin: Can manage all children (create, view, update, deactivate).
         - Receptionist: Can create, view, update children.
         - Babysitter: Can view assigned children.
         - Parent: Can view their own children.
         """
-        if self.action in ['create', 'update', 'partial_update']:
+        if self.action in ['create', 'update', 'partial_update', 'deactivate']: # Added 'deactivate' here
             permission_classes = [IsAdminOrReceptionist]
         elif self.action in ['list', 'retrieve']:
             permission_classes = [IsAdminOrReceptionist | IsBabysitterUser | IsParentUser]
-        elif self.action == 'destroy':
-            permission_classes = [IsAdminUser]
+        # Removed 'destroy' action permissions
         else:
             permission_classes = [permissions.IsAuthenticated]
         return [permission() for permission in permission_classes]
@@ -119,6 +118,21 @@ class ChildViewSet(viewsets.ModelViewSet):
             elif user.role in ['admin', 'receptionist', 'nurse']:
                 return queryset # Staff roles can see all children
         return Child.objects.none() # No children for unauthenticated users
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAdminOrReceptionist])
+    def deactivate(self, request, pk=None):
+        """
+        Deactivate a child by setting is_active to False instead of deleting.
+        """
+        try:
+            child = self.get_object()
+            child.is_active = False
+            child.save()
+            return Response({"message": f"Child {child.first_name} {child.last_name} deactivated successfully."}, status=status.HTTP_200_OK)
+        except Child.DoesNotExist:
+            return Response({"error": "Child not found."}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['POST'])
@@ -555,6 +569,20 @@ def chat_send(request, user_id):
         return Response(serializer.data, status=status.HTTP_201_CREATED)
     except User.DoesNotExist:
         return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def mark_messages_as_read(request, user_id):
+    """
+    Marks all messages from a specific user to the requesting user as read.
+    """
+    try:
+        other_user = User.objects.get(pk=user_id)
+    except User.DoesNotExist:
+        return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    ChatMessage.objects.filter(sender=other_user, recipient=request.user, is_read=False).update(is_read=True)
+    return Response({"message": "Messages marked as read"}, status=status.HTTP_200_OK)
 
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])

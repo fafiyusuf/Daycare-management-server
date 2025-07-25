@@ -1,13 +1,16 @@
+# daycare_app/urls.py
+
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
+from rest_framework_simplejwt.views import (
+    TokenObtainPairView,
+    TokenRefreshView,
+)
 from . import views
 
 router = DefaultRouter()
-# Explicitly set the basename for UserViewSet if you want 'users' to be its prefix
 router.register(r'users', views.UserViewSet) 
-# Explicitly set the basename for StaffViewSet to 'staff' 
-# because its URL prefix is 'staff' and its queryset is also 'User'
-router.register(r'staff', views.StaffViewSet, basename='staff') # <--- ADD basename='staff' here
+router.register(r'staff', views.StaffViewSet, basename='staff')
 router.register(r'families', views.FamilyViewSet)
 router.register(r'children', views.ChildViewSet)
 router.register(r'attendance', views.AttendanceViewSet)
@@ -19,9 +22,16 @@ router.register(r'staff-profiles', views.StaffProfileViewSet)
 
 urlpatterns = [
     # Router URLs
-    path('', include(router.urls)), # Include DRF router URLs
+    path('', include(router.urls)),
 
-    # Authentication
+    # --- Authentication (The fix is here) ---
+    # The login view that gives the initial token pair
+    # Note: You can still use your custom login view if it's more complex,
+    # but this is the standard way.
+    path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    # This is the missing URL for refreshing the token
+    path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    
     path('login/', views.login_view, name='login'),
     path('logout/', views.logout_view, name='logout'),
     path('password-reset/', views.password_reset_view, name='password_reset'),
@@ -48,6 +58,7 @@ urlpatterns = [
     path('chat/users/', views.chat_users, name='chat_users'),
     path('chat/conversations/', views.chat_conversations, name='chat_conversations'),
     path('chat/<int:user_id>/messages/', views.chat_messages, name='chat_messages'),
-    path('chat/<int:user_id>/send/', views.chat_send, name='send_message'), # Corrected: views.send_message to views.chat_send
+    path('chat/<int:user_id>/send/', views.chat_send, name='send_message'),
     path('chat/unread-count/', views.unread_count, name='unread_count'),
+    path('chat/<int:user_id>/mark-as-read/', views.mark_messages_as_read, name='mark_messages_as_read'),
 ]

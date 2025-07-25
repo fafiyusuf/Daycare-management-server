@@ -138,13 +138,12 @@ CORS_ALLOW_CREDENTIALS = True
 
 # Channels
 CHANNEL_LAYERS = {
-    'default': {
-        'BACKEND': 'channels_redis.core.RedisChannelLayer',
-        'CONFIG': {
-            "hosts": [('127.0.0.1', 6379)],
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [("127.0.0.1", 6379)], # Use your WSL IP address here
         },
     },
 }
-
 # Custom user model
 AUTH_USER_MODEL = 'daycare_app.User'
