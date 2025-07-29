@@ -45,6 +45,7 @@ urlpatterns = [
     
     # Daily Reports
     path('daily-reports/<int:child_id>/', views.daily_reports, name='daily_reports'),
+    path('daily-reports/<int:child_id>/<str:date_str>/', views.daily_reports, name='daily_reports_by_date'),
     
     # Public Portal
     path('public/announcements/', views.public_announcements, name='public_announcements'),

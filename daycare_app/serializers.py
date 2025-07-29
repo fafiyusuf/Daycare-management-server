@@ -103,7 +103,7 @@ class ChildSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'first_name', 'last_name', 'date_of_birth', 'family',
             'parents', 'parent_ids', 'assigned_babysitter', 'medical_info', 'allergies',
-            'emergency_contact', 'profile_picture', 'is_active', 'created_at'
+            'emergency_contact', 'profile_picture', 'is_active', 'created_at', 'birth_certificate', 'vaccination_card'
         ]
         extra_kwargs = {
             'parents': {'read_only': True},
@@ -160,6 +160,10 @@ class ChildSerializer(serializers.ModelSerializer):
         instance.allergies = validated_data.get('allergies', instance.allergies)
         instance.emergency_contact = validated_data.get('emergency_contact', instance.emergency_contact)
         instance.is_active = validated_data.get('is_active', instance.is_active)
+        if 'birth_certificate' in validated_data:
+            instance.birth_certificate = validated_data.get('birth_certificate', instance.birth_certificate)
+        if 'vaccination_card' in validated_data:
+            instance.vaccination_card = validated_data.get('vaccination_card', instance.vaccination_card)
         instance.save()
         
         if parent_ids:

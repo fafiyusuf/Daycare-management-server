@@ -50,6 +50,8 @@ class Child(models.Model):
     allergies = models.TextField(blank=True)
     emergency_contact = models.CharField(max_length=15)
     profile_picture = models.ImageField(upload_to='children/', blank=True, null=True)
+    birth_certificate = models.FileField(upload_to='birth_certificates/', blank=True, null=True)
+    vaccination_card = models.FileField(upload_to='vaccination_cards/', blank=True, null=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     

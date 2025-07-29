@@ -8,9 +8,12 @@ from django.contrib.auth import authenticate
 from django.utils import timezone
 from django.db.models import Q, Count
 from datetime import datetime, date
+from rest_framework import filters
+from django_filters.rest_framework import DjangoFilterBackend
 from .models import *
 from .serializers import * # Make sure all your serializers are imported
 from .permissions import * # Ensure all your permission classes are imported
+from .pagination import StandardResultsSetPagination
 
 # Authentication Views
 @api_view(['POST'])
@@ -40,9 +43,6 @@ def logout_view(request):
 @api_view(['POST'])
 @permission_classes([permissions.AllowAny])
 def password_reset_view(request):
-    # This is a placeholder. A real password reset would involve
-    # sending an email with a reset link/token.
-    # For now, we'll just acknowledge the request.
     email = request.data.get('email')
     if email:
         return Response({"message": f"Password reset initiated for {email}. (Feature not fully implemented)"}, status=status.HTTP_200_OK)
@@ -52,57 +52,65 @@ def password_reset_view(request):
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
     serializer_class = UserSerializer
+    pagination_class = StandardResultsSetPagination
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['role', 'is_active']
+    search_fields = ['username', 'email', 'first_name', 'last_name']
+    ordering_fields = ['username', 'email', 'date_joined']
     
     def get_permissions(self):
-            """
-            Set permissions based on the action.
-            - 'create': Only Admin can create new users (as per your specific requirement).
-            - 'list', 'retrieve': Authenticated users can view.
-            - 'update', 'partial_update', 'destroy': Only admin can modify/delete.
-            """
-            # Ensure only permission CLASSES are in the list
             if self.action == 'create':
                 permission_classes = [IsAdminUser] 
             elif self.action in ['list', 'retrieve']:
                 permission_classes = [permissions.IsAuthenticated] 
-            else: # For 'update', 'partial_update', 'destroy'
+            else:
                 permission_classes = [IsAdminUser]
             return [permission() for permission in permission_classes]
 
 class StaffViewSet(viewsets.ModelViewSet):
     queryset = User.objects.filter(role__in=['admin', 'receptionist', 'babysitter', 'nurse'])
-    serializer_class = StaffCreateSerializer # Use StaffCreateSerializer for creating staff
-    permission_classes = [IsAdminUser] # Only admin can manage staff
+    serializer_class = StaffCreateSerializer
+    permission_classes = [IsAdminUser]
+    pagination_class = StandardResultsSetPagination
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['role']
+    search_fields = ['username', 'email', 'first_name', 'last_name']
+    ordering_fields = ['username', 'first_name', 'last_name']
 
     def get_serializer_class(self):
         if self.action == 'create':
             return StaffCreateSerializer
-        return UserSerializer # Use UserSerializer for retrieving/updating staff details
-
+        return UserSerializer
 
 class FamilyViewSet(viewsets.ModelViewSet):
     queryset = Family.objects.all()
     serializer_class = FamilySerializer
-    permission_classes = [IsAdminOrReceptionist] # Admin and Receptionist can manage families
+    permission_classes = [IsAdminOrReceptionist]
+    pagination_class = StandardResultsSetPagination
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['name']
+    ordering_fields = ['name', 'created_at']
+    filterset_fields = ['name']
 
 class ChildViewSet(viewsets.ModelViewSet):
     queryset = Child.objects.all()
     serializer_class = ChildSerializer
-    permission_classes = [permissions.IsAuthenticated] # Base permission, refined by get_permissions
+    permission_classes = [permissions.IsAuthenticated]
+    pagination_class = StandardResultsSetPagination
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['is_active', 'family', 'assigned_babysitter']
+    search_fields = ['first_name', 'last_name']
+    ordering_fields = ['first_name', 'last_name', 'date_of_birth']
+    ordering = ['first_name', 'last_name'] # Add this line to fix the warning
 
     def get_permissions(self):
-        """
-        Permissions for Child:
-        - Admin: Can manage all children (create, view, update, deactivate).
-        - Receptionist: Can create, view, update children.
-        - Babysitter: Can view assigned children.
-        - Parent: Can view their own children.
-        """
-        if self.action in ['create', 'update', 'partial_update', 'deactivate']: # Added 'deactivate' here
+        if self.action in ['create', 'update', 'partial_update']:
             permission_classes = [IsAdminOrReceptionist]
         elif self.action in ['list', 'retrieve']:
-            permission_classes = [IsAdminOrReceptionist | IsBabysitterUser | IsParentUser]
-        # Removed 'destroy' action permissions
+            # ✅ CORRECTED LINE: Added 'IsNurseUser' to allow viewing children.
+            permission_classes = [IsAdminOrReceptionist | IsBabysitterUser | IsParentUser | IsNurseUser]
+        elif self.action == 'destroy':
+            permission_classes = [IsAdminUser]
         else:
             permission_classes = [permissions.IsAuthenticated]
         return [permission() for permission in permission_classes]
@@ -182,7 +190,17 @@ def assign_child(request):
 class AttendanceViewSet(viewsets.ModelViewSet):
     queryset = Attendance.objects.all()
     serializer_class = AttendanceSerializer
-    permission_classes = [IsReceptionistUser]
+    permission_classes = [IsAdminOrReceptionist]
+    pagination_class = StandardResultsSetPagination
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = {
+        'check_in_time': ['gte', 'lte', 'exact', 'date'],
+        'check_out_time': ['gte', 'lte', 'exact', 'date', 'isnull'],
+        'child': ['exact'],
+        'checked_in_by': ['exact'],
+    }
+    ordering_fields = ['check_in_time', 'check_out_time']
+    search_fields = ['child__first_name', 'child__last_name', 'notes']
     
     def perform_create(self, serializer):
         serializer.save(checked_in_by=self.request.user)
@@ -254,18 +272,22 @@ def attendance_by_date(request, date_str):
     serializer = AttendanceSerializer(attendance_records, many=True)
     return Response(serializer.data)
 
-
 # --- Child Activity Management ---
 class ChildActivityViewSet(viewsets.ModelViewSet):
     queryset = ChildActivity.objects.all()
     serializer_class = ChildActivitySerializer
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = StandardResultsSetPagination
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['child', 'activity_type', 'logged_by']
+    search_fields = ['description']
+    ordering_fields = ['start_time', 'end_time']
 
     def get_permissions(self):
         if self.action == 'create':
             permission_classes = [IsBabysitterUser | IsAdminUser]
         elif self.action in ['list', 'retrieve']:
-            permission_classes = [IsBabysitterUser | IsParentUser | IsAdminUser]
+            permission_classes = [IsBabysitterUser | IsParentUser | IsAdminUser | IsNurseUser]
         elif self.action in ['update', 'partial_update', 'destroy']:
             permission_classes = [IsAdminUser]
         else:
@@ -285,16 +307,20 @@ class ChildActivityViewSet(viewsets.ModelViewSet):
                 return queryset.filter(child__assigned_babysitter=user)
             elif user.role == 'parent':
                 return queryset.filter(child__parents=user)
-            elif user.role == 'admin':
+            elif user.role in ['admin', 'nurse']:
                 return queryset
         return ChildActivity.objects.none()
-
 
 # --- Health Event Management ---
 class HealthEventViewSet(viewsets.ModelViewSet):
     queryset = HealthEvent.objects.all()
     serializer_class = HealthEventSerializer
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = StandardResultsSetPagination
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['child', 'event_type', 'recorded_by']
+    search_fields = ['description']
+    ordering_fields = ['timestamp']
 
     def get_permissions(self):
         if self.action == 'create':
@@ -302,7 +328,7 @@ class HealthEventViewSet(viewsets.ModelViewSet):
         elif self.action in ['list', 'retrieve']:
             permission_classes = [IsNurseUser | IsParentUser | IsAdminUser]
         elif self.action in ['update', 'partial_update', 'destroy']:
-            permission_classes = [IsAdminUser]
+            permission_classes = [IsAdminUser | IsNurseAndOwner]
         else:
             permission_classes = [permissions.IsAuthenticated]
 
@@ -316,14 +342,13 @@ class HealthEventViewSet(viewsets.ModelViewSet):
         user = self.request.user
 
         if user.is_authenticated:
-            if user.role == 'nurse':
+            if user.role == 'nurse':                
                 return queryset
             elif user.role == 'parent':
                 return queryset.filter(child__parents=user)
             elif user.role == 'admin':
                 return queryset
         return HealthEvent.objects.none()
-
 
 # --- Daily Reports Aggregation View ---
 @api_view(['GET'])
@@ -373,59 +398,62 @@ def daily_reports(request, child_id, date_str=None):
     serializer = DailyReportSerializer(report_data)
     return Response(serializer.data, status=status.HTTP_200_OK)
 
-
 # --- Announcement Management ---
 class AnnouncementViewSet(viewsets.ModelViewSet):
     queryset = Announcement.objects.all()
     serializer_class = AnnouncementSerializer
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = StandardResultsSetPagination
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['is_public', 'author']
+    search_fields = ['title', 'content']
+    ordering_fields = ['created_at']
 
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            # Only Admin or Receptionist can manage announcements
             permission_classes = [IsAdminOrReceptionist]
-        else: # For list and retrieve
-            # All authenticated users can view announcements
+        else:
             permission_classes = [permissions.IsAuthenticated]
         return [permission() for permission in permission_classes]
 
     def perform_create(self, serializer):
-        # Automatically set the author to the current authenticated user
         serializer.save(author=self.request.user)
-
 
 # --- Gallery Management ---
 class GalleryViewSet(viewsets.ModelViewSet):
     queryset = Gallery.objects.all()
     serializer_class = GallerySerializer
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = StandardResultsSetPagination
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['is_public', 'uploaded_by']
+    search_fields = ['title', 'description']
+    ordering_fields = ['created_at']
 
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            # Only Admin or Receptionist can manage gallery items
             permission_classes = [IsAdminOrReceptionist]
-        else: # For list and retrieve
-            # All authenticated users can view gallery (or IsPublic for public view)
+        else:
             permission_classes = [permissions.IsAuthenticated]
         return [permission() for permission in permission_classes]
 
     def perform_create(self, serializer):
-        # Automatically set the uploader to the current authenticated user
         serializer.save(uploaded_by=self.request.user)
-
 
 # --- Staff Profile Management ---
 class StaffProfileViewSet(viewsets.ModelViewSet):
     queryset = StaffProfile.objects.all()
     serializer_class = StaffProfileSerializer
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = StandardResultsSetPagination
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = ['is_public', 'user']
+    ordering_fields = ['experience_years']
 
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            # Only Admin can manage staff profiles
             permission_classes = [IsAdminUser]
         elif self.action in ['list', 'retrieve']:
-            # Staff can view their own profile, Admin can view all. Public staff view is separate.
             permission_classes = [permissions.IsAuthenticated]
         else:
             permission_classes = [permissions.IsAuthenticated]
@@ -435,16 +463,11 @@ class StaffProfileViewSet(viewsets.ModelViewSet):
         queryset = super().get_queryset()
         user = self.request.user
         if user.is_authenticated and user.role != 'admin':
-            # Staff users can only see their own profile in this viewset
-            # Admins can see all, handled by default queryset
             if user.role in ['receptionist', 'babysitter', 'nurse']:
                 queryset = queryset.filter(user=user)
             elif user.role == 'parent':
-                # Parents should not typically view staff profiles via this endpoint
-                # (public_staff view is for public access)
-                queryset = StaffProfile.objects.none() # Or raise permission denied
+                queryset = StaffProfile.objects.none()
         return queryset
-
 
 # --- Public Portal Views ---
 @api_view(['GET'])
@@ -472,7 +495,6 @@ def public_staff(request):
 @api_view(['GET'])
 @permission_classes([IsAdminUser])
 def system_status(request):
-    # Example status metrics
     user_count = User.objects.count()
     child_count = Child.objects.count()
     active_children_today = Attendance.objects.filter(check_in_time__date=timezone.now().date(), check_out_time__isnull=True).count()
@@ -489,18 +511,12 @@ def system_status(request):
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
 def chat_users(request):
-    """
-    Get a list of all users excluding the requesting user, for chat purposes.
-    Admins see all users. Staff see other staff and parents. Parents see staff.
-    """
     user = request.user
     if user.role == 'admin':
         users = User.objects.exclude(id=user.id).order_by('first_name')
     elif user.role in ['receptionist', 'babysitter', 'nurse']:
-        # Staff can chat with other staff and parents
         users = User.objects.filter(Q(role__in=['admin', 'receptionist', 'babysitter', 'nurse']) | Q(role='parent')).exclude(id=user.id).order_by('first_name')
     elif user.role == 'parent':
-        # Parents can chat with staff (admin, receptionist, babysitter, nurse)
         users = User.objects.filter(role__in=['admin', 'receptionist', 'babysitter', 'nurse']).exclude(id=user.id).order_by('first_name')
     else:
         return Response({"error": "Unauthorized access to chat users."}, status=status.HTTP_403_FORBIDDEN)
@@ -508,42 +524,33 @@ def chat_users(request):
     serializer = ChatUserSerializer(users, many=True, context={'request': request})
     return Response(serializer.data)
 
-
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
 def chat_conversations(request):
-    """Get list of conversations (users you've chatted with)"""
     user = request.user
-    
-    # Get users who have sent or received messages from current user
     sent_to_ids = ChatMessage.objects.filter(sender=user).values_list('recipient__id', flat=True).distinct()
     received_from_ids = ChatMessage.objects.filter(recipient=user).values_list('sender__id', flat=True).distinct()
     
     all_chatted_user_ids = set(list(sent_to_ids) + list(received_from_ids))
     
-    # Exclude the current user from the list of conversation partners
     chatted_with_users = User.objects.filter(id__in=all_chatted_user_ids).exclude(id=user.id).order_by('first_name')
     
     serializer = ChatUserSerializer(chatted_with_users, many=True, context={'request': request})
     return Response(serializer.data)
 
-
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
 def chat_messages(request, user_id):
-    """Get messages between current user and a specific user"""
     try:
         other_user = User.objects.get(pk=user_id)
     except User.DoesNotExist:
         return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
     
-    # Messages sent by current user to other_user OR sent by other_user to current user
     messages = ChatMessage.objects.filter(
         Q(sender=request.user, recipient=other_user) |
         Q(sender=other_user, recipient=request.user)
     ).order_by('timestamp')
 
-    # Mark messages sent by other_user to current_user as read
     ChatMessage.objects.filter(sender=other_user, recipient=request.user, is_read=False).update(is_read=True)
     
     serializer = ChatMessageSerializer(messages, many=True)
@@ -552,11 +559,12 @@ def chat_messages(request, user_id):
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
 def chat_send(request, user_id):
-    """Send a message to a specific user"""
     try:
         recipient = User.objects.get(pk=user_id)
-        
-        # Create message
+    except User.DoesNotExist:
+        return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    try:
         message = ChatMessage.objects.create(
             sender=request.user,
             recipient=recipient,
@@ -567,8 +575,8 @@ def chat_send(request, user_id):
         
         serializer = ChatMessageSerializer(message)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
-    except User.DoesNotExist:
-        return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
@@ -587,20 +595,5 @@ def mark_messages_as_read(request, user_id):
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
 def unread_count(request):
-    """Get total unread message count"""
     count = ChatMessage.objects.filter(recipient=request.user, is_read=False).count()
     return Response({"unread_count": count})
-
-@api_view(['GET'])
-@permission_classes([permissions.IsAuthenticated])
-def chat_conversations(request):
-    """Get list of conversations (users you've chatted with)"""
-    # Get users who have sent or received messages from current user
-    sent_to = ChatMessage.objects.filter(sender=request.user).values_list('recipient', flat=True).distinct()
-    received_from = ChatMessage.objects.filter(recipient=request.user).values_list('sender', flat=True).distinct()
-    
-    user_ids = set(list(sent_to) + list(received_from))
-    users = User.objects.filter(id__in=user_ids)
-    
-    serializer = ChatUserSerializer(users, many=True, context={'request': request})
-    return Response(serializer.data)
