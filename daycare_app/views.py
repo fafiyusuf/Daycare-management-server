@@ -190,7 +190,7 @@ def assign_child(request):
 class AttendanceViewSet(viewsets.ModelViewSet):
     queryset = Attendance.objects.all()
     serializer_class = AttendanceSerializer
-    permission_classes = [IsAdminOrReceptionist]
+    permission_classes = [CanManageAttendance]  # <-- FIXED: Using the new permission class
     pagination_class = StandardResultsSetPagination
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = {
@@ -201,7 +201,22 @@ class AttendanceViewSet(viewsets.ModelViewSet):
     }
     ordering_fields = ['check_in_time', 'check_out_time']
     search_fields = ['child__first_name', 'child__last_name', 'notes']
-    
+
+    def get_queryset(self):
+        user = self.request.user
+        queryset = super().get_queryset()
+
+        if user.is_authenticated:
+            if user.role == 'babysitter':
+                # Babysitters can only see attendance for their assigned children
+                return queryset.filter(child__assigned_babysitter=user)
+            elif user.role in ['admin', 'receptionist']:
+                # Admin and receptionist can see all attendance
+                return queryset
+        
+        # Deny access for other roles by returning an empty queryset
+        return Attendance.objects.none()
+
     def perform_create(self, serializer):
         serializer.save(checked_in_by=self.request.user)
 

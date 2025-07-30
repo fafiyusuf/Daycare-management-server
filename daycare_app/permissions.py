@@ -1,3 +1,5 @@
+# daycare_app/permissions.py
+
 from rest_framework import permissions
 
 
@@ -28,6 +30,7 @@ class IsAdminOrReceptionist(permissions.BasePermission):
 class IsStaffUser(permissions.BasePermission):
     def has_permission(self, request, view):
         return request.user.is_authenticated and request.user.role in ['admin', 'receptionist', 'babysitter', 'nurse']
+
 # daycare_app/permissions.py
 class IsNurseAndOwner(permissions.BasePermission):
     """
@@ -45,3 +48,10 @@ class IsNurseAndOwner(permissions.BasePermission):
         
         # Deny access for other roles
         return False
+
+class CanManageAttendance(permissions.BasePermission):
+    """
+    Custom permission to allow admin, receptionist, and babysitter to manage attendance.
+    """
+    def has_permission(self, request, view):
+        return request.user.is_authenticated and request.user.role in ['admin', 'receptionist', 'babysitter']
