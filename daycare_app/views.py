@@ -251,60 +251,58 @@ class AttendanceViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['post'])
     def checkout(self, request):
-        child_id = request.data.get('child_id')
-        if not child_id:
-            return Response({"error": "Child ID is required for check-out"}, status=status.HTTP_400_BAD_REQUEST)
+        attendance_id = request.data.get('attendance_id')
+        
+        if not attendance_id:
+            return Response({"error": "Attendance ID is required for check-out"}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            child = Child.objects.get(pk=child_id)
-            attendance = Attendance.objects.filter(
-                child=child,
-                check_in_time__date=timezone.now().date(),
-                check_out_time__isnull=True
-            ).first()
+            # Find the specific attendance record to check out
+            attendance = Attendance.objects.filter(pk=attendance_id, check_out_time__isnull=True).first()
             
             if not attendance:
-                return Response({"error": "No active check-in found for this child today"}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"error": "No active check-in found with this ID"}, status=status.HTTP_400_BAD_REQUEST)
             
+            # Additional check: ensure the user has permission for this child
+            user = request.user
+            if user.role == 'babysitter' and attendance.child.assigned_babysitter != user:
+                return Response({"error": "You are not assigned to this child."}, status=status.HTTP_403_FORBIDDEN)
+
             attendance.check_out_time = timezone.now()
             attendance.checked_out_by = request.user
             attendance.save()
             return Response(AttendanceSerializer(attendance).data, status=status.HTTP_200_OK)
-        except Child.DoesNotExist:
-            return Response({"error": "Child not found"}, status=status.HTTP_404_NOT_FOUND)
+        except Attendance.DoesNotExist:
+             return Response({"error": "Attendance record not found"}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-@api_view(['GET'])
-@permission_classes([permissions.IsAuthenticated])
-def attendance_by_date(request, date_str):
-    try:
-        target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
-    except ValueError:
-        return Response({"error": "Invalid date format. Use YYYY-MM-DD."}, status=status.HTTP_400_BAD_REQUEST)
-
-    attendance_records = Attendance.objects.filter(check_in_time__date=target_date)
-    serializer = AttendanceSerializer(attendance_records, many=True)
-    return Response(serializer.data)
-
 # --- Child Activity Management ---
 class ChildActivityViewSet(viewsets.ModelViewSet):
-    queryset = ChildActivity.objects.all()
+    queryset = ChildActivity.objects.all().order_by('-start_time')  # Order by most recent
     serializer_class = ChildActivitySerializer
     permission_classes = [permissions.IsAuthenticated]
     pagination_class = StandardResultsSetPagination
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['child', 'activity_type', 'logged_by']
+
+    # ✅ UPDATED: Added date filtering for 'start_time'
+    filterset_fields = {
+        'child': ['exact'],
+        'activity_type': ['exact'],
+        'logged_by': ['exact'],
+        'start_time': ['date'],  # Allows filtering like ?start_time__date=YYYY-MM-DD
+    }
     search_fields = ['description']
     ordering_fields = ['start_time', 'end_time']
 
     def get_permissions(self):
-        if self.action == 'create':
+        # ✅ FIXED: This logic now allows the owner of an activity (e.g., a babysitter) to edit or delete it.
+        if self.action in ['update', 'partial_update', 'destroy']:
+            permission_classes = [IsActivityOwnerOrAdmin]
+        elif self.action == 'create':
             permission_classes = [IsBabysitterUser | IsAdminUser]
         elif self.action in ['list', 'retrieve']:
             permission_classes = [IsBabysitterUser | IsParentUser | IsAdminUser | IsNurseUser]
-        elif self.action in ['update', 'partial_update', 'destroy']:
-            permission_classes = [IsAdminUser]
         else:
             permission_classes = [permissions.IsAuthenticated]
 
@@ -322,7 +320,7 @@ class ChildActivityViewSet(viewsets.ModelViewSet):
                 return queryset.filter(child__assigned_babysitter=user)
             elif user.role == 'parent':
                 return queryset.filter(child__parents=user)
-            elif user.role in ['admin', 'nurse']:
+            elif user.role in ['admin', 'nurse', 'receptionist']:  # Receptionist can see too
                 return queryset
         return ChildActivity.objects.none()
 
