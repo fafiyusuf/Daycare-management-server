@@ -160,6 +160,9 @@ class ChildSerializer(serializers.ModelSerializer):
         instance.allergies = validated_data.get('allergies', instance.allergies)
         instance.emergency_contact = validated_data.get('emergency_contact', instance.emergency_contact)
         instance.is_active = validated_data.get('is_active', instance.is_active)
+        # Ensure document fields update on PATCH (including profile picture)
+        if 'profile_picture' in validated_data:
+            instance.profile_picture = validated_data.get('profile_picture', instance.profile_picture)
         if 'birth_certificate' in validated_data:
             instance.birth_certificate = validated_data.get('birth_certificate', instance.birth_certificate)
         if 'vaccination_card' in validated_data:
@@ -185,6 +188,11 @@ class AttendanceSerializer(serializers.ModelSerializer):
 
 class ChildActivitySerializer(serializers.ModelSerializer):
     logged_by_name = serializers.CharField(source='logged_by.get_full_name', read_only=True)
+    # Add stable key for React lists
+    key = serializers.SerializerMethodField(read_only=True)
+
+    def get_key(self, obj):
+        return f"act-{obj.id}"
 
     class Meta:
         model = ChildActivity
@@ -193,6 +201,11 @@ class ChildActivitySerializer(serializers.ModelSerializer):
 
 class HealthEventSerializer(serializers.ModelSerializer):
     recorded_by_name = serializers.CharField(source='recorded_by.get_full_name', read_only=True)
+    # Add stable key for React lists
+    key = serializers.SerializerMethodField(read_only=True)
+
+    def get_key(self, obj):
+        return f"evt-{obj.id}"
 
     class Meta:
         model = HealthEvent

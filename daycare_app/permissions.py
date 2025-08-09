@@ -55,3 +55,23 @@ class CanManageAttendance(permissions.BasePermission):
     """
     def has_permission(self, request, view):
         return request.user.is_authenticated and request.user.role in ['admin', 'receptionist', 'babysitter']
+
+class IsParentAndOwner(permissions.BasePermission):
+    """
+    Custom permission to allow parents to update only their own children's documents.
+    Admins and receptionists can always update.
+    """
+    def has_permission(self, request, view):
+        return request.user.is_authenticated and request.user.role in ['admin', 'receptionist', 'parent']
+    
+    def has_object_permission(self, request, view, obj):
+        # Admins and receptionists can always perform any action
+        if request.user.role in ['admin', 'receptionist']:
+            return True
+        
+        # If it's a parent, they can only update if the child is theirs
+        if request.user.role == 'parent':
+            return obj.parents.filter(id=request.user.id).exists()
+        
+        # Deny access for other roles
+        return False

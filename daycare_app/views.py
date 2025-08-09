@@ -104,10 +104,14 @@ class ChildViewSet(viewsets.ModelViewSet):
     ordering = ['first_name', 'last_name'] # Add this line to fix the warning
 
     def get_permissions(self):
-        if self.action in ['create', 'update', 'partial_update']:
+        if self.action == 'create':
             permission_classes = [IsAdminOrReceptionist]
+        elif self.action == 'update':
+            permission_classes = [IsAdminOrReceptionist]
+        elif self.action == 'partial_update':
+            # Allow parents to PATCH, admins/receptionists retain full rights
+            permission_classes = [IsAdminOrReceptionist | IsParentUser]
         elif self.action in ['list', 'retrieve']:
-            # ✅ CORRECTED LINE: Added 'IsNurseUser' to allow viewing children.
             permission_classes = [IsAdminOrReceptionist | IsBabysitterUser | IsParentUser | IsNurseUser]
         elif self.action == 'destroy':
             permission_classes = [IsAdminUser]
