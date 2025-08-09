@@ -31,7 +31,6 @@ class IsStaffUser(permissions.BasePermission):
     def has_permission(self, request, view):
         return request.user.is_authenticated and request.user.role in ['admin', 'receptionist', 'babysitter', 'nurse']
 
-# daycare_app/permissions.py
 class IsNurseAndOwner(permissions.BasePermission):
     """
     Custom permission to only allow nurses to edit/delete their own HealthEvent.
@@ -48,6 +47,19 @@ class IsNurseAndOwner(permissions.BasePermission):
         
         # Deny access for other roles
         return False
+
+# ✅ ADDED: New permission class to check for ownership or admin role
+class IsActivityOwnerOrAdmin(permissions.BasePermission):
+    """
+    Custom permission to only allow the user who logged an activity or an admin to edit/delete it.
+    """
+    def has_object_permission(self, request, view, obj):
+        # Admin users can perform any action
+        if request.user.role == 'admin':
+            return True
+        
+        # The user who originally logged the activity can edit or delete it.
+        return obj.logged_by == request.user
 
 class CanManageAttendance(permissions.BasePermission):
     """

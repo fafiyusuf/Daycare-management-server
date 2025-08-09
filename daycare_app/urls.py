@@ -40,9 +40,6 @@ urlpatterns = [
     path('parents/<int:pk>/activate/', views.activate_parent, name='activate_parent'),
     path('assign-child/', views.assign_child, name='assign_child'),
     
-    # Attendance
-    path('attendance/<str:date_str>/', views.attendance_by_date, name='attendance_by_date'),
-    
     # Daily Reports
     path('daily-reports/<int:child_id>/', views.daily_reports, name='daily_reports'),
     path('daily-reports/<int:child_id>/<str:date_str>/', views.daily_reports, name='daily_reports_by_date'),
