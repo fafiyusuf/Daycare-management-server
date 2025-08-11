@@ -86,10 +86,19 @@ class FamilySerializer(serializers.ModelSerializer):
         model = Family
         fields = '__all__'
 
+class BabysitterSerializer(serializers.ModelSerializer):
+    """Serializer for basic babysitter info."""
+    class Meta:
+        model = User
+        fields = ['id', 'first_name', 'last_name', 'email', 'phone']
+
 # Corrected ChildSerializer
 class ChildSerializer(serializers.ModelSerializer):
+
     # This field is for output only.
     parents = UserSerializer(many=True, read_only=True)
+    assigned_babysitter = BabysitterSerializer(read_only=True)
+    family = FamilySerializer(read_only=True)
     
     # This is for input during create/update
     parent_ids = serializers.ListField(
@@ -97,18 +106,36 @@ class ChildSerializer(serializers.ModelSerializer):
         write_only=True,
         required=False
     )
+    family_id = serializers.PrimaryKeyRelatedField(
+        queryset=Family.objects.all(), source='family', write_only=True, required=False, allow_null=True
+    )
+    assigned_babysitter_id = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.filter(role='babysitter'), source='assigned_babysitter', write_only=True, required=False, allow_null=True
+    )
     
     class Meta:
         model = Child
         fields = [
-            'id', 'first_name', 'last_name', 'date_of_birth', 'family',
-            'parents', 'parent_ids', 'assigned_babysitter', 'medical_info', 'allergies',
+            'id', 'first_name', 'last_name', 'date_of_birth', 'family', 'family_id',
+            'parents', 'parent_ids', 'assigned_babysitter', 'assigned_babysitter_id', 'medical_info', 'allergies',
             'emergency_contact', 'profile_picture', 'is_active', 'created_at', 'birth_certificate', 'vaccination_card'
         ]
         extra_kwargs = {
             'parents': {'read_only': True},
-            'assigned_babysitter': {'required': False, 'allow_null': True},
+            'assigned_babysitter': {'read_only': True},
+            'family': {'read_only': True},
+            'medical_info': {'required': False, 'allow_blank': True},
+            'allergies': {'required': False, 'allow_blank': True},
         }
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # Provide friendly fallbacks only if truly empty
+        if not data.get('medical_info'):
+            data['medical_info'] = "No medical information provided."
+        if not data.get('allergies'):
+            data['allergies'] = "No known allergies."
+        return data
 
     def validate(self, data):
         """
@@ -150,25 +177,14 @@ class ChildSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         parent_ids = validated_data.pop('parent_ids', [])
-        
-        instance.first_name = validated_data.get('first_name', instance.first_name)
-        instance.last_name = validated_data.get('last_name', instance.last_name)
-        instance.date_of_birth = validated_data.get('date_of_birth', instance.date_of_birth)
-        instance.family = validated_data.get('family', instance.family)
-        instance.assigned_babysitter = validated_data.get('assigned_babysitter', instance.assigned_babysitter)
-        instance.medical_info = validated_data.get('medical_info', instance.medical_info)
-        instance.allergies = validated_data.get('allergies', instance.allergies)
-        instance.emergency_contact = validated_data.get('emergency_contact', instance.emergency_contact)
-        instance.is_active = validated_data.get('is_active', instance.is_active)
-        # Ensure document fields update on PATCH (including profile picture)
-        if 'profile_picture' in validated_data:
-            instance.profile_picture = validated_data.get('profile_picture', instance.profile_picture)
-        if 'birth_certificate' in validated_data:
-            instance.birth_certificate = validated_data.get('birth_certificate', instance.birth_certificate)
-        if 'vaccination_card' in validated_data:
-            instance.vaccination_card = validated_data.get('vaccination_card', instance.vaccination_card)
+
+        # The 'family' and 'assigned_babysitter' are handled by their 'source' argument
+        # on the PrimaryKeyRelatedField, so we can just iterate through validated_data
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+
         instance.save()
-        
+
         if parent_ids:
             parents = User.objects.filter(id__in=parent_ids)
             instance.parents.set(parents)
