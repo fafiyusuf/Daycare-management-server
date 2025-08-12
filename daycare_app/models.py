@@ -58,6 +58,18 @@ class Child(models.Model):
     def __str__(self):
         return f"{self.first_name} {self.last_name}"
 
+    def save(self, *args, **kwargs):
+        # Enforce babysitter capacity (max 5 active children)
+        if self.assigned_babysitter_id:
+            babysitter = self.assigned_babysitter
+            # Count other active children already assigned to this babysitter
+            qs = Child.objects.filter(assigned_babysitter=babysitter, is_active=True)
+            if self.pk:
+                qs = qs.exclude(pk=self.pk)
+            if qs.count() >= 5:
+                raise ValueError("This babysitter already has the maximum of 5 active children assigned.")
+        super().save(*args, **kwargs)
+
 class Attendance(models.Model):
     child = models.ForeignKey(Child, on_delete=models.CASCADE, related_name='attendance_records')
     check_in_time = models.DateTimeField()
@@ -82,17 +94,9 @@ class Attendance(models.Model):
         return f"{self.child} - {self.check_in_time.date()}"
 
 class ChildActivity(models.Model):
-    ACTIVITY_TYPES = [
-        ('meal', 'Meal'),
-        ('nap', 'Nap'),
-        ('play', 'Play'),
-        ('learning', 'Learning'),
-        ('outdoor', 'Outdoor Activity'),
-        ('other', 'Other'),
-    ]
-    
+    # activity_type changed to free-form text (previously constrained by ACTIVITY_TYPES choices)
     child = models.ForeignKey(Child, on_delete=models.CASCADE, related_name='activities')
-    activity_type = models.CharField(max_length=20, choices=ACTIVITY_TYPES)
+    activity_type = models.CharField(max_length=50)  # Free input now
     description = models.TextField()
     start_time = models.DateTimeField()
     end_time = models.DateTimeField(null=True, blank=True)
@@ -109,17 +113,9 @@ class ChildActivity(models.Model):
         return f"{self.child} - {self.activity_type} - {self.start_time.date()}"
 
 class HealthEvent(models.Model):
-    EVENT_TYPES = [
-        ('medication', 'Medication'),
-        ('health_check', 'Health Check'),
-        ('injury', 'Injury'),
-        ('illness', 'Illness'),
-        ('temperature', 'Temperature Check'),
-        ('other', 'Other'),
-    ]
-    
+    # event_type changed to free-form text (previously constrained by EVENT_TYPES choices)
     child = models.ForeignKey(Child, on_delete=models.CASCADE, related_name='health_events')
-    event_type = models.CharField(max_length=20, choices=EVENT_TYPES)
+    event_type = models.CharField(max_length=50)  # Free input now
     description = models.TextField()
     medication_name = models.CharField(max_length=100, blank=True)
     dosage = models.CharField(max_length=50, blank=True)

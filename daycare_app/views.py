@@ -182,8 +182,15 @@ def assign_child(request):
     if babysitter_id:
         try:
             babysitter = User.objects.get(pk=babysitter_id, role='babysitter')
+            # Enforce capacity BEFORE assigning
+            current_count = Child.objects.filter(assigned_babysitter=babysitter, is_active=True).exclude(pk=child.pk).count()
+            if current_count >= 5:
+                return Response({"error": "This babysitter already has 5 active children assigned."}, status=status.HTTP_400_BAD_REQUEST)
             child.assigned_babysitter = babysitter
-            child.save()
+            try:
+                child.save()
+            except ValueError as ve:
+                return Response({"error": str(ve)}, status=status.HTTP_400_BAD_REQUEST)
             return Response({"message": f"Child {child.first_name} assigned to babysitter {babysitter.username}."}, status=status.HTTP_200_OK)
         except User.DoesNotExist:
             return Response({"error": "Babysitter not found"}, status=status.HTTP_404_NOT_FOUND)
@@ -319,6 +326,20 @@ class ChildActivityViewSet(viewsets.ModelViewSet):
         queryset = super().get_queryset()
         user = self.request.user
 
+        # Optional date range filtering via query params: ?date_from=YYYY-MM-DD&date_to=YYYY-MM-DD
+        date_from = self.request.query_params.get('date_from')
+        date_to = self.request.query_params.get('date_to')
+        if date_from:
+            try:
+                queryset = queryset.filter(start_time__date__gte=date_from)
+            except ValueError:
+                pass
+        if date_to:
+            try:
+                queryset = queryset.filter(start_time__date__lte=date_to)
+            except ValueError:
+                pass
+
         if user.is_authenticated:
             if user.role == 'babysitter':
                 return queryset.filter(child__assigned_babysitter=user)
@@ -357,6 +378,20 @@ class HealthEventViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = super().get_queryset()
         user = self.request.user
+
+        # Optional date range filtering via query params: ?date_from=YYYY-MM-DD&date_to=YYYY-MM-DD
+        date_from = self.request.query_params.get('date_from')
+        date_to = self.request.query_params.get('date_to')
+        if date_from:
+            try:
+                queryset = queryset.filter(timestamp__date__gte=date_from)
+            except ValueError:
+                pass
+        if date_to:
+            try:
+                queryset = queryset.filter(timestamp__date__lte=date_to)
+            except ValueError:
+                pass
 
         if user.is_authenticated:
             if user.role == 'nurse':                

@@ -206,6 +206,7 @@ class ChildActivitySerializer(serializers.ModelSerializer):
     logged_by_name = serializers.CharField(source='logged_by.get_full_name', read_only=True)
     # Add stable key for React lists
     key = serializers.SerializerMethodField(read_only=True)
+    activity_type = serializers.CharField(max_length=50)
 
     def get_key(self, obj):
         return f"act-{obj.id}"
@@ -219,6 +220,7 @@ class HealthEventSerializer(serializers.ModelSerializer):
     recorded_by_name = serializers.CharField(source='recorded_by.get_full_name', read_only=True)
     # Add stable key for React lists
     key = serializers.SerializerMethodField(read_only=True)
+    event_type = serializers.CharField(max_length=50)
 
     def get_key(self, obj):
         return f"evt-{obj.id}"
