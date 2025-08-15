@@ -351,13 +351,19 @@ class ChildActivityViewSet(viewsets.ModelViewSet):
 
 # --- Health Event Management ---
 class HealthEventViewSet(viewsets.ModelViewSet):
-    queryset = HealthEvent.objects.all()
+    queryset = HealthEvent.objects.all().order_by('-timestamp')
     serializer_class = HealthEventSerializer
     permission_classes = [permissions.IsAuthenticated]
     pagination_class = StandardResultsSetPagination
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['child', 'event_type', 'recorded_by']
-    search_fields = ['description']
+    # UPDATED: Added timestamp__date for filtering
+    filterset_fields = {
+        'child': ['exact'],
+        'event_type': ['exact'],
+        'recorded_by': ['exact'],
+        'timestamp': ['date'],  # Allows ?timestamp__date=YYYY-MM-DD
+    }
+    search_fields = ['description', 'notes']
     ordering_fields = ['timestamp']
 
     def get_permissions(self):
@@ -380,6 +386,7 @@ class HealthEventViewSet(viewsets.ModelViewSet):
         user = self.request.user
 
         # Optional date range filtering via query params: ?date_from=YYYY-MM-DD&date_to=YYYY-MM-DD
+        # This part is now redundant for single-date filtering but is kept for potential range filtering features.
         date_from = self.request.query_params.get('date_from')
         date_to = self.request.query_params.get('date_to')
         if date_from:
