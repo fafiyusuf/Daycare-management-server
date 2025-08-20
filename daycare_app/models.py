@@ -178,3 +178,14 @@ class ChatMessage(models.Model):
     
     def __str__(self):
         return f"{self.sender} to {self.recipient} - {self.timestamp}"
+
+# New model: IncidentLog (private to admin, created by nurse/babysitter)
+class IncidentLog(models.Model):
+    child = models.ForeignKey(Child, on_delete=models.CASCADE, related_name='incident_logs')
+    title = models.CharField(max_length=200)
+    description = models.TextField()
+    logged_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='incident_logs')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Incident: {self.child} - {self.title} on {self.created_at.date()}"

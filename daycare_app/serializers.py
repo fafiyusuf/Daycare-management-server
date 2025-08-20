@@ -295,3 +295,16 @@ class ChatUserSerializer(serializers.ModelSerializer):
                 'is_read': last_message.is_read
             }
         return None
+
+# New serializer for IncidentLog
+class IncidentLogSerializer(serializers.ModelSerializer):
+    logged_by_name = serializers.CharField(source='logged_by.get_full_name', read_only=True)
+    child_name = serializers.SerializerMethodField(read_only=True)
+
+    def get_child_name(self, obj):
+        return f"{obj.child.first_name} {obj.child.last_name}"
+
+    class Meta:
+        model = IncidentLog
+        fields = ['id', 'child', 'child_name', 'title', 'description', 'logged_by', 'logged_by_name', 'created_at']
+        read_only_fields = ['logged_by', 'created_at', 'logged_by_name', 'child_name']

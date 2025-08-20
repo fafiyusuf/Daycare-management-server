@@ -402,6 +402,41 @@ class HealthEventViewSet(viewsets.ModelViewSet):
                 return queryset
         return HealthEvent.objects.none()
 
+# --- Incident Log Management (Private to Admin; created by nurse/babysitter) ---
+class IncidentLogViewSet(viewsets.ModelViewSet):
+    queryset = IncidentLog.objects.all().order_by('-created_at')
+    serializer_class = IncidentLogSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    pagination_class = StandardResultsSetPagination
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = {
+        'child': ['exact'],
+        'title': ['exact', 'icontains'],
+        'logged_by': ['exact'],
+    }
+    search_fields = ['title', 'description']
+    ordering_fields = ['created_at']
+
+    def get_permissions(self):
+        # Only admin can list/retrieve/update/delete. Nurses and babysitters can create.
+        if self.action == 'create':
+            permission_classes = [IsNurseUser | IsBabysitterUser | IsAdminUser]
+        elif self.action in ['list', 'retrieve', 'update', 'partial_update', 'destroy']:
+            permission_classes = [IsAdminUser]
+        else:
+            permission_classes = [permissions.IsAuthenticated]
+        return [permission() for permission in permission_classes]
+
+    def get_queryset(self):
+        # Admin sees all; others see none (to keep incidents private to admin)
+        user = self.request.user
+        if user.is_authenticated and user.role == 'admin':
+            return super().get_queryset()
+        return IncidentLog.objects.none()
+
+    def perform_create(self, serializer):
+        serializer.save(logged_by=self.request.user)
+
 # --- Daily Reports Aggregation View ---
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])

@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import *
+from .models import User, Family, Child, Attendance, ChildActivity, HealthEvent, Announcement, Gallery, StaffProfile, ChatMessage, IncidentLog
 
 @admin.register(User)
 class CustomUserAdmin(UserAdmin):
@@ -62,3 +62,8 @@ class ChatMessageAdmin(admin.ModelAdmin):
     list_display = ['sender', 'recipient', 'timestamp', 'is_read']
     list_filter = ['timestamp', 'is_read']
     search_fields = ['sender__username', 'recipient__username', 'message']
+@admin.register(IncidentLog)
+class IncidentLogAdmin(admin.ModelAdmin):
+    list_display = ('id', 'child', 'title', 'logged_by', 'created_at')
+    list_filter = ('created_at', 'logged_by')
+    search_fields = ('title', 'description', 'child__first_name', 'child__last_name', 'logged_by__username')
