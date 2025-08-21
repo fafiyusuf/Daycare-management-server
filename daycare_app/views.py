@@ -691,3 +691,23 @@ def mark_messages_as_read(request, user_id):
 def unread_count(request):
     count = ChatMessage.objects.filter(recipient=request.user, is_read=False).count()
     return Response({"unread_count": count})
+
+# --- Public Application Submission ---
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
+def public_apply(request):
+    """
+    Public endpoint to submit an application for roles: parent, nurse, receptionist, babysitter.
+    """
+    serializer = ApplicationSerializer(data=request.data)
+    if serializer.is_valid():
+        app = serializer.save()
+        return Response(ApplicationSerializer(app).data, status=status.HTTP_201_CREATED)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class ApplicationViewSet(viewsets.ReadOnlyModelViewSet):
+    """Admin can review applications."""
+    queryset = Application.objects.all().order_by('-created_at')
+    serializer_class = ApplicationSerializer
+    permission_classes = [IsAdminUser]
+    pagination_class = StandardResultsSetPagination

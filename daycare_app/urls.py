@@ -20,6 +20,7 @@ router.register(r'incident-logs', views.IncidentLogViewSet)
 router.register(r'announcements', views.AnnouncementViewSet)
 router.register(r'gallery', views.GalleryViewSet)
 router.register(r'staff-profiles', views.StaffProfileViewSet)
+router.register(r'applications', views.ApplicationViewSet, basename='applications')
 
 urlpatterns = [
     # Router URLs
@@ -49,6 +50,7 @@ urlpatterns = [
     path('public/announcements/', views.public_announcements, name='public_announcements'),
     path('public/gallery/', views.public_gallery, name='public_gallery'),
     path('public/staff/', views.public_staff, name='public_staff'),
+    path('public/apply/', views.public_apply, name='public_apply'),
     
     # System
     path('system/status/', views.system_status, name='system_status'),

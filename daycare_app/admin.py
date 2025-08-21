@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import User, Family, Child, Attendance, ChildActivity, HealthEvent, Announcement, Gallery, StaffProfile, ChatMessage, IncidentLog
+from .models import User, Family, Child, Attendance, ChildActivity, HealthEvent, Announcement, Gallery, StaffProfile, ChatMessage, IncidentLog, Application
 
 @admin.register(User)
 class CustomUserAdmin(UserAdmin):
@@ -67,3 +67,9 @@ class IncidentLogAdmin(admin.ModelAdmin):
     list_display = ('id', 'child', 'title', 'logged_by', 'created_at')
     list_filter = ('created_at', 'logged_by')
     search_fields = ('title', 'description', 'child__first_name', 'child__last_name', 'logged_by__username')
+
+@admin.register(Application)
+class ApplicationAdmin(admin.ModelAdmin):
+    list_display = ('full_name', 'email', 'role_applied', 'created_at', 'status')
+    list_filter = ('role_applied', 'status', 'created_at')
+    search_fields = ('full_name', 'email', 'phone', 'reason')

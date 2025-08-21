@@ -308,3 +308,39 @@ class IncidentLogSerializer(serializers.ModelSerializer):
         model = IncidentLog
         fields = ['id', 'child', 'child_name', 'title', 'description', 'logged_by', 'logged_by_name', 'created_at']
         read_only_fields = ['logged_by', 'created_at', 'logged_by_name', 'child_name']
+
+# Public application serializer
+class ApplicationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Application
+        fields = ['id', 'full_name', 'email', 'phone', 'role_applied', 'child_age_months', 'reason', 'status', 'created_at']
+        read_only_fields = ['status', 'created_at']
+
+    def validate(self, attrs):
+        role = attrs.get('role_applied')
+        age = attrs.get('child_age_months')
+        if role == 'parent' and age is None:
+            raise serializers.ValidationError({'child_age_months': 'Child age (months) is required when applying as a parent.'})
+        return attrs
+
+# Public Application Serializer
+class ApplicationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Application
+        fields = ['id', 'full_name', 'email', 'phone', 'role_applied', 'child_age_months', 'reason', 'created_at', 'status']
+        read_only_fields = ['created_at', 'status']
+
+    def validate(self, attrs):
+        role = attrs.get('role_applied')
+        child_age = attrs.get('child_age_months')
+        # If applying as parent, child_age_months should be provided and within 0-48 months
+        if role == 'parent':
+            if child_age is None:
+                raise serializers.ValidationError({
+                    'child_age_months': 'This field is required when applying as a parent.'
+                })
+            if child_age < 0 or child_age > 60:  # allow up to 5 years for application
+                raise serializers.ValidationError({
+                    'child_age_months': 'Please provide a valid age in months (0-60).'
+                })
+        return attrs

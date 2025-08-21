@@ -189,3 +189,25 @@ class IncidentLog(models.Model):
 
     def __str__(self):
         return f"Incident: {self.child} - {self.title} on {self.created_at.date()}"
+
+# Public application submissions (no auth required to create)
+class Application(models.Model):
+    ROLE_CHOICES = [
+        ('receptionist', 'Receptionist'),
+        ('babysitter', 'Babysitter'),
+        ('nurse', 'Nurse'),
+        ('parent', 'Parent'),
+    ]
+
+    full_name = models.CharField(max_length=150)
+    email = models.EmailField()
+    phone = models.CharField(max_length=20, blank=True)
+    role_applied = models.CharField(max_length=20, choices=ROLE_CHOICES)
+    # Parent-specific extra fields
+    child_age_months = models.PositiveIntegerField(null=True, blank=True)
+    reason = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    status = models.CharField(max_length=20, default='new')  # new, reviewed, accepted, rejected
+
+    def __str__(self):
+        return f"{self.full_name} -> {self.role_applied} ({self.created_at.date()})"
