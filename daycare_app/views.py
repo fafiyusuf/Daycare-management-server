@@ -73,7 +73,7 @@ class StaffViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
     pagination_class = StandardResultsSetPagination
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['role']
+    filterset_fields = ['role', 'is_public']  # Added is_public for easier filtering
     search_fields = ['username', 'email', 'first_name', 'last_name']
     ordering_fields = ['username', 'first_name', 'last_name']
 
@@ -581,8 +581,17 @@ def public_gallery(request):
 @api_view(['GET'])
 @permission_classes([permissions.AllowAny])
 def public_staff(request):
-    staff_profiles = StaffProfile.objects.filter(is_public=True).select_related('user')
-    serializer = StaffProfileSerializer(staff_profiles, many=True)
+    # Get public staff users directly, not through profiles
+    staff_users = User.objects.filter(
+        is_public=True,
+        role__in=['admin', 'receptionist', 'babysitter', 'nurse']
+    )
+    print(f"PUBLIC STAFF API: Found {staff_users.count()} staff users with is_public=True")
+    for user in staff_users:
+        print(f"  - Staff {user.first_name} {user.last_name} (ID: {user.id})")
+    
+    # Use UserSerializer instead of StaffProfileSerializer
+    serializer = UserSerializer(staff_users, many=True)
     return Response(serializer.data)
 
 # --- System Views ---

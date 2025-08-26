@@ -1,0 +1,30 @@
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+from .models import User, StaffProfile
+
+@receiver(post_save, sender=User)
+def update_staff_profile_visibility(sender, instance, **kwargs):
+    """
+    When User.is_public is updated, update the corresponding StaffProfile.is_public
+    """
+    # Only process staff users
+    if instance.role in ['admin', 'receptionist', 'babysitter', 'nurse']:
+        try:
+            # Get or create staff profile
+            staff_profile, created = StaffProfile.objects.get_or_create(
+                user=instance,
+                defaults={
+                    'bio': '',
+                    'qualifications': '',
+                    'experience_years': 0,
+                    'specialties': '',
+                    'is_public': instance.is_public
+                }
+            )
+            
+            # If profile exists and was not just created, update is_public
+            if not created and staff_profile.is_public != instance.is_public:
+                staff_profile.is_public = instance.is_public
+                staff_profile.save(update_fields=['is_public'])
+        except Exception as e:
+            print(f"Error updating staff profile for user {instance.id}: {e}")
