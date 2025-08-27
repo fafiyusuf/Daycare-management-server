@@ -1,83 +1,42 @@
-# Multi-stage Dockerfile for Next.js with TypeScript and Tailwind CSS
+## Frontend Dockerfile (Next.js) - Production Ready
+## Multi-stage build for slim runtime; using PNPM
 
-# Stage 1: Dependencies
-FROM node:18-alpine AS deps
-RUN apk add --no-cache libc6-compat
+FROM node:20-alpine AS deps
 WORKDIR /app
+RUN corepack enable
+COPY frontend/pnpm-lock.yaml frontend/package.json ./
+RUN pnpm fetch
 
-# Install pnpm
-RUN npm install -g pnpm
-
-# Copy package files
-COPY package.json pnpm-lock.yaml* ./
-RUN pnpm install --frozen-lockfile
-
-# Stage 2: Builder
-FROM node:18-alpine AS builder
+FROM node:20-alpine AS builder
 WORKDIR /app
+RUN corepack enable
+COPY frontend/package.json frontend/pnpm-lock.yaml ./
+COPY --from=deps /root/.pnpm-store /root/.pnpm-store
+ENV NEXT_TELEMETRY_DISABLED=1 \
+    NODE_ENV=production
+COPY frontend .
+RUN pnpm install --frozen-lockfile --offline \
+  && pnpm build \
+  && rm -rf node_modules \
+  && pnpm install --prod --frozen-lockfile --offline
 
-# Install pnpm
-RUN npm install -g pnpm
-
-# Copy dependencies
-COPY --from=deps /app/node_modules ./node_modules
-COPY . .
-
-# Set environment variables for build
-ARG NEXT_PUBLIC_APP_NAME
-ARG NEXT_PUBLIC_APP_URL
-ARG NEXT_PUBLIC_API_URL
-
-ENV NEXT_PUBLIC_APP_NAME=$NEXT_PUBLIC_APP_NAME
-ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
-ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
-
-# Disable Next.js telemetry
-ENV NEXT_TELEMETRY_DISABLED 1
-
-# Build the application
-RUN pnpm build
-
-# Stage 3: Production runner
-FROM node:18-alpine AS runner
+FROM node:20-alpine AS runner
 WORKDIR /app
+ENV NODE_ENV=production \
+    NEXT_TELEMETRY_DISABLED=1 \
+    PORT=3000
 
-ENV NODE_ENV production
-ENV NEXT_TELEMETRY_DISABLED 1
+RUN addgroup -S app && adduser -S app -G app
 
-# Create non-root user
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
-
-# Copy built application
 COPY --from=builder /app/public ./public
+COPY --from=builder /app/package.json ./
+COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 
-# Set correct permissions
-USER nextjs
-
+USER app
 EXPOSE 3000
 
-ENV PORT 3000
-ENV HOSTNAME "0.0.0.0"
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD wget -qO- http://localhost:3000/ || exit 1
 
 CMD ["node", "server.js"]
-
-# Stage 4: Development
-FROM node:18-alpine AS development
-WORKDIR /app
-
-# Install pnpm
-RUN npm install -g pnpm
-
-# Copy package files
-COPY package.json pnpm-lock.yaml* ./
-RUN pnpm install
-
-# Copy source code
-COPY . .
-
-EXPOSE 5000
-
-CMD ["pnpm", "dev"]

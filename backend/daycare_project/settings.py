@@ -141,7 +141,10 @@ CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [("127.0.0.1", 6379)], # Use your WSL IP address here
+            "hosts": [(
+                config('CHANNEL_REDIS_HOST', default='127.0.0.1'),
+                int(config('CHANNEL_REDIS_PORT', default=6379))
+            )],
         },
     },
 }
