@@ -313,34 +313,26 @@ class IncidentLogSerializer(serializers.ModelSerializer):
 class ApplicationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Application
-        fields = ['id', 'full_name', 'email', 'phone', 'role_applied', 'child_age_months', 'reason', 'status', 'created_at']
+        fields = [
+            'id', 'full_name', 'email', 'phone', 
+            'department', 'position', 'employee_monthly_salary', 'spouse_monthly_salary',
+            'child_birth_date', 'sub_city', 'woreda', 'kebele',
+            'status', 'created_at'
+        ]
         read_only_fields = ['status', 'created_at']
 
     def validate(self, attrs):
-        role = attrs.get('role_applied')
-        age = attrs.get('child_age_months')
-        if role == 'parent' and age is None:
-            raise serializers.ValidationError({'child_age_months': 'Child age (months) is required when applying as a parent.'})
+        # Calculate child age to ensure it meets requirements
+        if 'child_birth_date' in attrs:
+            today = date.today()
+            birth_date = attrs['child_birth_date']
+            age = relativedelta(today, birth_date)
+            total_months = age.years * 12 + age.months
+            
+            if total_months < 4 or total_months >= 48:
+                raise serializers.ValidationError({
+                    'child_birth_date': 'Child must be between 4 months and 4 years old.'
+                })
+                
         return attrs
 
-# Public Application Serializer
-class ApplicationSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Application
-        fields = ['id', 'full_name', 'email', 'phone', 'role_applied', 'child_age_months', 'reason', 'created_at', 'status']
-        read_only_fields = ['created_at', 'status']
-
-    def validate(self, attrs):
-        role = attrs.get('role_applied')
-        child_age = attrs.get('child_age_months')
-        # If applying as parent, child_age_months should be provided and within 0-48 months
-        if role == 'parent':
-            if child_age is None:
-                raise serializers.ValidationError({
-                    'child_age_months': 'This field is required when applying as a parent.'
-                })
-            if child_age < 0 or child_age > 60:  # allow up to 5 years for application
-                raise serializers.ValidationError({
-                    'child_age_months': 'Please provide a valid age in months (0-60).'
-                })
-        return attrs

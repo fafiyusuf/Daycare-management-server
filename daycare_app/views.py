@@ -706,7 +706,8 @@ def unread_count(request):
 @permission_classes([permissions.AllowAny])
 def public_apply(request):
     """
-    Public endpoint to submit an application for roles: parent, nurse, receptionist, babysitter.
+    Public endpoint to submit an application for female employees of the institution
+    with children between 4 months and 4 years old.
     """
     serializer = ApplicationSerializer(data=request.data)
     if serializer.is_valid():
@@ -715,8 +716,24 @@ def public_apply(request):
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class ApplicationViewSet(viewsets.ReadOnlyModelViewSet):
-    """Admin can review applications."""
+    """Admin can review parent applications."""
     queryset = Application.objects.all().order_by('-created_at')
     serializer_class = ApplicationSerializer
     permission_classes = [IsAdminUser]
     pagination_class = StandardResultsSetPagination
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['status']
+    search_fields = ['full_name', 'email', 'department', 'position']
+    ordering_fields = ['created_at', 'status']
+    
+    @action(detail=True, methods=['post'])
+    def update_status(self, request, pk=None):
+        """Update application status (accept/reject/etc)"""
+        application = self.get_object()
+        status_value = request.data.get('status')
+        if status_value not in ['new', 'reviewed', 'accepted', 'rejected']:
+            return Response({"error": "Invalid status value"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        application.status = status_value
+        application.save()
+        return Response(ApplicationSerializer(application).data)

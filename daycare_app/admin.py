@@ -70,6 +70,6 @@ class IncidentLogAdmin(admin.ModelAdmin):
 
 @admin.register(Application)
 class ApplicationAdmin(admin.ModelAdmin):
-    list_display = ('full_name', 'email', 'role_applied', 'created_at', 'status')
-    list_filter = ('role_applied', 'status', 'created_at')
-    search_fields = ('full_name', 'email', 'phone', 'reason')
+    list_display = ('full_name', 'email', 'department', 'position', 'created_at', 'status')
+    list_filter = ('status', 'created_at', 'department')
+    search_fields = ('full_name', 'email', 'phone', 'department', 'position')

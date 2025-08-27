@@ -190,24 +190,29 @@ class IncidentLog(models.Model):
     def __str__(self):
         return f"Incident: {self.child} - {self.title} on {self.created_at.date()}"
 
-# Public application submissions (no auth required to create)
+# Public application submissions for parents only (no auth required to create)
 class Application(models.Model):
-    ROLE_CHOICES = [
-        ('receptionist', 'Receptionist'),
-        ('babysitter', 'Babysitter'),
-        ('nurse', 'Nurse'),
-        ('parent', 'Parent'),
-    ]
-
+    # Only for parent applications from female employees
     full_name = models.CharField(max_length=150)
     email = models.EmailField()
     phone = models.CharField(max_length=20, blank=True)
-    role_applied = models.CharField(max_length=20, choices=ROLE_CHOICES)
-    # Parent-specific extra fields
-    child_age_months = models.PositiveIntegerField(null=True, blank=True)
-    reason = models.TextField(blank=True)
+    
+    # Employment details
+    department = models.CharField(max_length=100, default='', blank=True)
+    position = models.CharField(max_length=100, default='', blank=True)
+    employee_monthly_salary = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    spouse_monthly_salary = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    
+    # Child information
+    child_birth_date = models.DateField(default='2023-01-01')  # Default date for existing records
+    
+    # Residential address
+    sub_city = models.CharField(max_length=100, default='', blank=True)
+    woreda = models.CharField(max_length=50, default='', blank=True)
+    kebele = models.CharField(max_length=100, default='', blank=True)
+    
     created_at = models.DateTimeField(auto_now_add=True)
     status = models.CharField(max_length=20, default='new')  # new, reviewed, accepted, rejected
 
     def __str__(self):
-        return f"{self.full_name} -> {self.role_applied} ({self.created_at.date()})"
+        return f"{self.full_name} ({self.created_at.date()})"
