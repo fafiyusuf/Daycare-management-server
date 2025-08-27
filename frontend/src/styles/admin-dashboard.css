@@ -1,0 +1,25 @@
+/* Admin Dashboard custom styles (no Tailwind @apply to avoid build issues) */
+
+.ssgi-card .card-title-sm { font-size: 1rem; font-weight: 600; letter-spacing: -.01em; }
+
+.admin-filters label { font-size: .825rem; font-weight: 600; color: var(--muted-foreground, #6b7280); }
+.admin-filters input[type=date],
+.admin-filters select { height: 2rem; font-size: .8rem; }
+
+.admin-table-wrapper { position: relative; border: 1px solid var(--border, #e5e7eb); border-radius: .5rem; background: var(--background, #ffffff); }
+.admin-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+.admin-table thead th { font-size: .7rem; padding: .5rem .75rem; text-transform: uppercase; letter-spacing: .05em; font-weight: 600; color: var(--muted-foreground, #6b7280); background: rgba(0,0,0,0.03); }
+.admin-table tbody td { padding: .5rem .75rem; vertical-align: top; font-size: .8rem; }
+.admin-table tbody tr:nth-child(even) { background: rgba(0,0,0,0.015); }
+.admin-table tbody tr:hover { background: rgba(0,0,0,0.045); transition: background .15s ease; }
+
+.table-meta { font-size: .7rem; color: var(--muted-foreground, #6b7280); }
+
+.admin-pagination button { font-size: .65rem; padding: .35rem .55rem; border-radius: .375rem; border: 1px solid var(--input, #d1d5db); background: var(--background, #ffffff); cursor: pointer; }
+.admin-pagination button:hover:not(:disabled) { background: rgba(0,0,0,0.05); }
+.admin-pagination button:disabled { opacity: .4; cursor: not-allowed; }
+
+.admin-section-title { font-size: 1.125rem; font-weight: 600; }
+@media (min-width: 768px) { .admin-section-title { font-size: 1.25rem; } }
+.admin-section-sub { font-size: .7rem; color: var(--muted-foreground, #6b7280); }
+@media (min-width: 768px) { .admin-section-sub { font-size: .8rem; } }

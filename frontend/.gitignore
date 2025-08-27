@@ -1,0 +1,85 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+.env
+# dependencies
+/node_modules
+/.pnp
+.pnp.js
+.yarn/install-state.gz
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# local env files
+.env.production
+.env*.local
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+# --- Test / Coverage (added) ---
+# Jest / Istanbul
+coverage/
+coverage-unit/
+.nyc_output/
+*.lcov
+lcov.info
+coverage-final.json
+jest-html-reporters-*
+junit.xml
+
+# Cypress artifacts
+cypress/screenshots/
+cypress/videos/
+cypress/downloads/
+cypress/reports/
+
+# Test source (ignore if you no longer want tests tracked)
+**/__tests__/
+**/__mocks__/
+*.test.js
+*.test.jsx
+*.test.ts
+*.test.tsx
+*.spec.js
+*.spec.jsx
+*.spec.ts
+*.spec.tsx
+
+# Optional: ignore test config if you want them gone from VCS
+# jest.config.js
+# jest.setup.[jt]s
+# cypress.config.ts
+# global.d.ts
+cypress/
+cypress.config.ts
+jest.config.js
+jest.setup.ts
+global.d.ts

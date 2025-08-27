@@ -1,0 +1,31 @@
+# Dockerfile.nginx
+
+FROM nginx:alpine
+
+# Copy Nginx configuration
+COPY nginx/nginx.conf /etc/nginx/nginx.conf
+COPY nginx/default.conf /etc/nginx/conf.d/default.conf
+
+# Create SSL directory
+RUN mkdir -p /etc/nginx/ssl
+
+# Create self-signed certificate for development/testing
+# In production, you should replace these with real certificates
+RUN apk add --no-cache openssl && \
+    openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+    -keyout /etc/nginx/ssl/key.pem \
+    -out /etc/nginx/ssl/cert.pem \
+    -subj "/C=US/ST=State/L=City/O=Organization/CN=localhost" && \
+    chmod 600 /etc/nginx/ssl/key.pem /etc/nginx/ssl/cert.pem
+
+# Copy static files (for production Next.js standalone output)
+COPY --from=nextjs /app/public /usr/share/nginx/html
+COPY --from=nextjs /app/.next/static /usr/share/nginx/html/_next/static
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost/health || exit 1
+
+EXPOSE 80 443
+
+CMD ["nginx", "-g", "daemon off;"]
